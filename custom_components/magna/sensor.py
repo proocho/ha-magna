@@ -97,10 +97,13 @@ def _balance_extra(data: MagnaData) -> dict[str, str | float]:
     if mesiace:
         out["zapocitane_mesiace"] = len(mesiace)
         out["po_mesiac"] = mesiace[-1].strftime("%m/%Y")
-        out["presnost"] = (
-            "odhad – banká sa len prebytok pri kladných spotových cenách, "
-            "portál ho nerozlišuje; po každej faktúre prepíš ukotvenie"
-        )
+    else:
+        out["zapocitane_mesiace"] = 0
+    # Upozornenie platí vždy, aj keď sa od ukotvenia ešte nič nepripočítalo.
+    out["presnost"] = (
+        "odhad – banká sa len prebytok pri kladných spotových cenách, "
+        "portál ho nerozlišuje; po každej faktúre prepíš ukotvenie"
+    )
     return out
 
 
@@ -169,7 +172,10 @@ SENSORS: tuple[MagnaSensorDescription, ...] = (
         needs_anchor=True,
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         device_class=SensorDeviceClass.ENERGY,
-        state_class=SensorStateClass.MEASUREMENT,
+        # MEASUREMENT je pri device_class energy neplatne -- HA to odmietne
+        # s "impossible considering device class". TOTAL sedi: zostatok moze
+        # aj klesat, na rozdiel od TOTAL_INCREASING.
+        state_class=SensorStateClass.TOTAL,
         value=_balance,
         extra=_balance_extra,
     ),
