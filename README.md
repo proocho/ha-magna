@@ -1,5 +1,12 @@
 # Magna iPortál – elektrina a požičovňa (Home Assistant)
 
+<img src="https://raw.githubusercontent.com/proocho/ha-magna/main/custom_components/magna/brand/logo.png" alt="Magna iPortál" width="280">
+
+[![hacs][hacs-badge]][hacs-url]
+[![release][release-badge]][release-url]
+
+[![Otvor v HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=proocho&repository=ha-magna&category=integration)
+
 Custom integrácia pre Home Assistant, ktorá číta dáta zo zákazníckeho portálu
 **MAGNA ENERGIA** ([iportal.magna-energia.sk](https://iportal.magna-energia.sk/)):
 spotrebu po tarifných pásmach, prebytok výroby a hlavne **požičovňu elektriny**
@@ -94,8 +101,9 @@ Preto: **po každej faktúre prepíš ukotvenie** novým číslom z položky
 
 ## Inštalácia
 
-HACS → Integrations → ⋮ → Custom repositories → `https://github.com/proocho/ha-magna`,
-kategória *Integration*. Potom Nastavenia → Zariadenia a služby → Pridať
+Najrýchlejšie tlačidlom **Otvor v HACS** hore — otvorí HACS s predvyplneným
+repozitárom. Ručne: HACS → Integrations → ⋮ → Custom repositories →
+`https://github.com/proocho/ha-magna`, kategória *Integration*. Potom Nastavenia → Zariadenia a služby → Pridať
 integráciu → **Magna iPortál**.
 
 Prihlasovacie údaje sú rovnaké ako do zákazníckeho portálu Magna. Zadávajú sa
@@ -153,3 +161,8 @@ sa tu zámerne nepoužíva, aby integrácia nevyzerala ako oficiálna.
 ## Licencia
 
 MIT
+
+[hacs-badge]: https://img.shields.io/badge/HACS-Custom-41BDF5.svg
+[hacs-url]: https://github.com/hacs/integration
+[release-badge]: https://img.shields.io/github/v/release/proocho/ha-magna
+[release-url]: https://github.com/proocho/ha-magna/releases
