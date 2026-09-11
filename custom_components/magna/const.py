@@ -49,9 +49,15 @@ KIND_NAMES = {
     KIND_SURPLUS: "Prebytok výroby",
 }
 
-# typ v load.php -- 0 pre požičovňu, inak 1
-TYP_BANK = 0
-TYP_OTHER = 1
+# typ v load.php je TARIFNY POHLAD, nie druh odberneho miesta:
+#   <input id='radio_standard' name='typ_siete' value='1'>
+#   <input id='radio_4t'       name='typ_siete' value='0' checked>
+# Posielame vzdy 0 (4T). Portal ma 4T ako predvolbu a pri poziciovni
+# aj prebytku vyroby ho vnucuje sam (mg_get_data() tam nastavi typ = 0).
+# S typ=1 vrati standardnu tarifu, teda len "Spotreba VT/NT" namiesto
+# rozpadu na Noc / Dopoludnie / Popoludnie / Rano-Vecer.
+TYP_4T = 0
+TYP_STANDARD = 1
 
 UNIT_KWH = "kWh"
 UNIT_EUR = "EUR"

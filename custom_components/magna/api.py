@@ -29,8 +29,7 @@ from .const import (
     KIND_BANK_RETURN,
     KIND_CONSUMPTION,
     SUFFIX_TO_KIND,
-    TYP_BANK,
-    TYP_OTHER,
+    TYP_4T,
     USER_AGENT,
 )
 
@@ -46,9 +45,16 @@ _TR_RE = re.compile(r"<tr([^>]*)>(.*?)</tr>", re.S)
 _TD_RE = re.compile(r"<td[^>]*>(.*?)</td>", re.S)
 _TAG_RE = re.compile(r"<[^>]+>")
 _NUM_RE = re.compile(r"^([\d\s.,]+)\s*(kWh|EUR)$")
-_SELECT_RE = re.compile(r"custom_select\s+miesto.*?<ul.*?</ul>", re.S | re.I)
-_LI_RE = re.compile(r"<li[^>]*>(.*?)</li>", re.S)
-_FALLBACK_RE = re.compile(r">\s*((?:24ZZS|POZZS)[A-Z0-9]+\s*-\s*[^<]{5,90})<")
+# Odberne miesta su <div class='option' data-value='N'>Label</div> vnutri
+# <div class='options'> v bloku custom_select miesto. POZOR: povodna verzia
+# hladala <ul>, co na stranke naslo az legendu pasiem (#sortable_standard)
+# a vratila "Spotreba VT" / "Spotreba NT" namiesto odbernych miest.
+_SELECT_RE = re.compile(
+    r"custom_select\s+miesto.*?<div\s+class='options'>(.*?)</div>\s*</div>", re.S | re.I
+)
+_OPTION_RE = re.compile(
+    r"<div[^>]*class='option[^']*'[^>]*data-value='([^']*)'[^>]*>(.*?)</div>", re.S | re.I
+)
 
 
 class MagnaError(Exception):
@@ -91,8 +97,8 @@ def kind_for_label(label: str) -> str:
 
 
 def typ_for_label(label: str) -> int:
-    """JS posiela typ=0, keď label končí na '- Požičovňa'."""
-    return TYP_BANK if kind_for_label(label) == KIND_BANK_RETURN else TYP_OTHER
+    """Tarifný pohľad. Vždy 4T -- inak by prišla len štandardná tarifa."""
+    return TYP_4T
 
 
 def parse_summary(text_sumar: str | None) -> dict[str, Any]:
@@ -268,26 +274,25 @@ class MagnaApi:
             _LOGGER.debug("odhlásenie z portálu zlyhalo, ignorujem")
         self._logged_in = False
 
-    async def async_points(self) -> list[str]:
-        """Labely odberných miest v poradí, v akom ich portál vykresľuje.
+    async def async_points(self) -> list[tuple[str, str]]:
+        """Odberné miesta ako dvojice (eic, label).
 
-        Index v tomto zozname je zároveň parameter `eic` a samotný label je
-        parameter `option` -- portál ho posiela ako viditeľný text, nie ako id.
+        `eic` je atribút `data-value` položky, NIE jej poradie -- portál to
+        číta rovnako (`$('.custom_select.miesto .selection').attr("data-value")`
+        v `mg_get_data()`). Label je parameter `option`, posiela sa ako
+        viditeľný text.
         """
         if not self._logged_in:
             await self.async_login()
         page = await self._request("/spotreba")
-        raw: list[str] = []
         blok = _SELECT_RE.search(page)
-        if blok:
-            raw = [_text(li) for li in _LI_RE.findall(blok.group(0))]
-        if not any(raw):
-            raw = [m.strip() for m in _FALLBACK_RE.findall(page)]
-        out: list[str] = []
-        for item in raw:
-            item = re.sub(r"\s+", " ", item).strip()
-            if item and item not in out:
-                out.append(item)
+        if not blok:
+            raise MagnaError("v portáli sa nenašiel výber odberného miesta")
+        out: list[tuple[str, str]] = []
+        for eic, label in _OPTION_RE.findall(blok.group(1)):
+            label = re.sub(r"\s+", " ", _text(label)).strip()
+            if label and not any(label == existing for _, existing in out):
+                out.append((eic.strip(), label))
         if not out:
             raise MagnaError("v portáli sa nenašlo ani jedno odberné miesto")
         return out
@@ -296,7 +301,7 @@ class MagnaApi:
         self,
         date: str,
         option: str,
-        eic: int,
+        eic: str,
         interval: int = INTERVAL_MONTH,
         granularity: int = GRANULARITY_DAY,
     ) -> dict[str, Any]:

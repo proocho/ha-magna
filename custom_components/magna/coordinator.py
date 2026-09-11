@@ -40,11 +40,15 @@ _LOGGER = logging.getLogger(__name__)
 
 @dataclass
 class MagnaPoint:
-    """Odberné miesto. `eic` je index v zozname, `label` je parameter option."""
+    """Odberné miesto.
+
+    `eic` je atribút `data-value` z portálu, NIE poradie v zozname -- portál
+    to číta rovnako. `label` sa posiela ako parameter `option`.
+    """
 
     label: str
     kind: str
-    eic: int
+    eic: str
 
 
 @dataclass
@@ -141,10 +145,10 @@ class MagnaCoordinator(DataUpdateCoordinator[MagnaData]):
     async def _async_points(self) -> list[MagnaPoint]:
         if self._points is not None:
             return self._points
-        labels = await self.api.async_points()
+        miesta = await self.api.async_points()
         self._points = [
-            MagnaPoint(label=label, kind=kind_for_label(label), eic=index)
-            for index, label in enumerate(labels)
+            MagnaPoint(label=label, kind=kind_for_label(label), eic=eic)
+            for eic, label in miesta
         ]
         for p in self._points:
             _LOGGER.debug("odberné miesto eic=%s kind=%s: %s", p.eic, p.kind, p.label)
@@ -160,7 +164,13 @@ class MagnaCoordinator(DataUpdateCoordinator[MagnaData]):
             mesiace = [_month_back(_first_of_month(dnes), i) for i in range(pocet)]
 
             for point in data.points:
-                data.months.setdefault(point.kind, {})
+                # Jeden druh spracujeme raz. Na tomto účte je od každého druhu
+                # práve jedno miesto, ale demo účet ich má 11 naraz a bez tejto
+                # poistky by sa navzájom prepisovali (a stiahlo by sa 132 okien).
+                if point.kind in data.months:
+                    _LOGGER.debug("preskakujem %s, druh %s uz mam", point.label, point.kind)
+                    continue
+                data.months[point.kind] = {}
                 for mesiac in mesiace:
                     try:
                         raw = await self.api.async_load(
