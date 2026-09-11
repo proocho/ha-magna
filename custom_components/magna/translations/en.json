@@ -9,6 +9,13 @@
           "password": "Password"
         }
       },
+      "point": {
+        "title": "Metering point",
+        "description": "This account has several metering points. Pick the one to track — you can add the others as separate integrations.",
+        "data": {
+          "point_label": "Metering point"
+        }
+      },
       "reauth_confirm": {
         "title": "Sign in again",
         "description": "iPortal rejected the login for {username}. Enter the password again.",
@@ -22,17 +29,28 @@
       "cannot_connect": "iPortal did not respond. Try again later."
     },
     "abort": {
-      "already_configured": "This portal account is already configured.",
+      "already_configured": "This metering point is already configured.",
+      "no_points": "No metering point was found on this account.",
       "reauth_successful": "Login restored."
     }
   },
   "entity": {
     "sensor": {
-      "spotreba_mesiac": { "name": "Consumption this month" },
-      "naklady_mesiac": { "name": "Cost this month" },
-      "prebytok_mesiac": { "name": "Surplus production this month" },
-      "pozicovna_mesiac": { "name": "Returned from lending this month" },
-      "banka_zmena": { "name": "Lending balance change this month" }
+      "spotreba_mesiac": {
+        "name": "Consumption this month"
+      },
+      "naklady_mesiac": {
+        "name": "Cost in 4T this month"
+      },
+      "prebytok_mesiac": {
+        "name": "Surplus production this month"
+      },
+      "pozicovna_mesiac": {
+        "name": "Returned from lending this month"
+      },
+      "banka_zmena": {
+        "name": "Lending balance change this month"
+      }
     }
   }
 }

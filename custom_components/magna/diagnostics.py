@@ -18,14 +18,20 @@ async def async_get_config_entry_diagnostics(
 ) -> dict[str, Any]:
     """Vráti stav integrácie bez prihlasovacích údajov.
 
-    Labely odberných miest obsahujú EIC aj adresu, preto sa skracujú na druh
-    a index -- na diagnostiku to stačí a nevypadne z toho adresa.
+    Diagnostika sa vkladá do GitHub issues, takže z nej ide von len toľko,
+    koľko treba na ladenie: žiadne labely (obsahujú adresu) a z EIC kódu len
+    posledné štyri znaky, nech sa dajú miesta od seba odlíšiť.
     """
     coordinator = entry.runtime_data
     data = coordinator.data
 
     miesta = [
-        {"eic": p.eic, "kind": p.kind, "label_length": len(p.label)}
+        {
+            "eic": p.eic,
+            "kind": p.kind,
+            "code": f"...{p.code[-4:]}",
+            "label_length": len(p.label),
+        }
         for p in (data.points if data else [])
     ]
 

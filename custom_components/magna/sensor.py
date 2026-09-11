@@ -33,6 +33,10 @@ class MagnaSensorDescription(SensorEntityDescription):
 
     value: Callable[[MagnaData], float | None]
     extra: Callable[[MagnaData], dict[str, str | float]] | None = None
+    # Senzor sa vytvorí, len ak účet tieto druhy odberných miest naozaj má.
+    # Väčšina zákazníkov Magny požičovňu nemá a tri natrvalo prázdne senzory
+    # sú horšie než žiadne.
+    requires: frozenset[str] = frozenset()
 
 
 def _mesiac_atributy(data: MagnaData, kind: str) -> dict[str, str | float]:
@@ -62,6 +66,20 @@ def _total(kind: str) -> Callable[[MagnaData], float | None]:
 def _cost(data: MagnaData) -> float | None:
     m = data.newest(KIND_CONSUMPTION)
     return None if m is None or m.cost is None else round(m.cost, 2)
+
+
+def _cost_extra(data: MagnaData) -> dict[str, str | float]:
+    """K cene patrí doslovný popis z portálu.
+
+    Portál počíta „Celkové náklady v 4T" každému, aj tomu, kto štvortarif
+    nemá -- vtedy je to hypotetické číslo, koľko by platil, keby prešiel.
+    Preto sa doslovný popis zobrazuje ako atribút, nech je jasné, čo to je.
+    """
+    out = _mesiac_atributy(data, KIND_CONSUMPTION)
+    m = data.newest(KIND_CONSUMPTION)
+    if m is not None and m.cost_label:
+        out["popis"] = m.cost_label
+    return out
 
 
 def _net(data: MagnaData) -> float | None:
@@ -100,11 +118,12 @@ SENSORS: tuple[MagnaSensorDescription, ...] = (
         device_class=SensorDeviceClass.MONETARY,
         state_class=SensorStateClass.TOTAL,
         value=_cost,
-        extra=lambda d: _mesiac_atributy(d, KIND_CONSUMPTION),
+        extra=_cost_extra,
     ),
     MagnaSensorDescription(
         key="prebytok_mesiac",
         translation_key="prebytok_mesiac",
+        requires=frozenset({KIND_SURPLUS}),
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         device_class=SensorDeviceClass.ENERGY,
         state_class=SensorStateClass.TOTAL,
@@ -114,6 +133,7 @@ SENSORS: tuple[MagnaSensorDescription, ...] = (
     MagnaSensorDescription(
         key="pozicovna_mesiac",
         translation_key="pozicovna_mesiac",
+        requires=frozenset({KIND_BANK_RETURN}),
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         device_class=SensorDeviceClass.ENERGY,
         state_class=SensorStateClass.TOTAL,
@@ -123,6 +143,7 @@ SENSORS: tuple[MagnaSensorDescription, ...] = (
     MagnaSensorDescription(
         key="banka_zmena",
         translation_key="banka_zmena",
+        requires=frozenset({KIND_SURPLUS, KIND_BANK_RETURN}),
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         device_class=SensorDeviceClass.ENERGY,
         state_class=SensorStateClass.TOTAL,
@@ -139,8 +160,11 @@ async def async_setup_entry(
 ) -> None:
     """Vytvorí senzory."""
     coordinator = entry.runtime_data
+    dostupne = coordinator.data.kinds
     async_add_entities(
-        MagnaSensor(coordinator, entry, description) for description in SENSORS
+        MagnaSensor(coordinator, entry, description)
+        for description in SENSORS
+        if description.requires <= dostupne
     )
 
 
@@ -161,7 +185,9 @@ class MagnaSensor(CoordinatorEntity[MagnaCoordinator], SensorEntity):
         self._attr_unique_id = f"{entry.entry_id}_{description.key}"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, entry.entry_id)},
-            name="Magna iPortál",
+            # Podla odberneho miesta, nie "Magna iPortal" - na jednom ucte
+            # moze byt viac miest a kazde je vlastny config entry.
+            name=entry.title or "Magna iPortál",
             manufacturer="MAGNA ENERGIA",
             configuration_url="https://iportal.magna-energia.sk/",
         )

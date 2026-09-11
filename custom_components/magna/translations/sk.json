@@ -9,6 +9,13 @@
           "password": "Heslo"
         }
       },
+      "point": {
+        "title": "Odberné miesto",
+        "description": "Na účte je viac odberných miest. Vyber si to, ktoré chceš sledovať — ďalšie môžeš pridať ako samostatnú integráciu.",
+        "data": {
+          "point_label": "Odberné miesto"
+        }
+      },
       "reauth_confirm": {
         "title": "Znovu sa prihlásiť",
         "description": "iPortál odmietol prihlásenie pre {username}. Zadaj heslo znova.",
@@ -22,17 +29,28 @@
       "cannot_connect": "iPortál neodpovedal. Skús to znova neskôr."
     },
     "abort": {
-      "already_configured": "Tento portálový účet je už pridaný.",
+      "already_configured": "Toto odberné miesto je už pridané.",
+      "no_points": "Na tomto účte sa nenašlo žiadne odberné miesto.",
       "reauth_successful": "Prihlásenie bolo obnovené."
     }
   },
   "entity": {
     "sensor": {
-      "spotreba_mesiac": { "name": "Spotreba za mesiac" },
-      "naklady_mesiac": { "name": "Náklady za mesiac" },
-      "prebytok_mesiac": { "name": "Prebytok výroby za mesiac" },
-      "pozicovna_mesiac": { "name": "Vrátené z požičovne za mesiac" },
-      "banka_zmena": { "name": "Zmena požičovne za mesiac" }
+      "spotreba_mesiac": {
+        "name": "Spotreba za mesiac"
+      },
+      "naklady_mesiac": {
+        "name": "Náklady v 4T za mesiac"
+      },
+      "prebytok_mesiac": {
+        "name": "Prebytok výroby za mesiac"
+      },
+      "pozicovna_mesiac": {
+        "name": "Vrátené z požičovne za mesiac"
+      },
+      "banka_zmena": {
+        "name": "Zmena požičovne za mesiac"
+      }
     }
   }
 }

@@ -62,5 +62,14 @@ TYP_STANDARD = 1
 UNIT_KWH = "kWh"
 UNIT_EUR = "EUR"
 
-STAT_ID_TEMPLATE = "magna:{kind}"
-STAT_ID_BAND_TEMPLATE = "magna:{kind}_{band}"
+# Timeout na jednu poziadavku. Bez neho by sa cakalo na aiohttp default
+# (5 minut) a zaseknuty portal by tak drzal cely setup integracie.
+REQUEST_TIMEOUT = 60
+
+CONF_POINT_CODE = "point_code"
+CONF_POINT_LABEL = "point_label"
+
+# Statistic_id sa stavia na EIC kode z labelu, nie na data-value -- to je len
+# poradie v rozbalovacke a posunie sa, ked zakaznikovi pribudne odberne miesto.
+STAT_ID_TEMPLATE = "magna:{code}"
+STAT_ID_BAND_TEMPLATE = "magna:{code}_{band}"

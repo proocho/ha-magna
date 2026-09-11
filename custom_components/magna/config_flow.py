@@ -12,8 +12,8 @@ from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
 from homeassistant.helpers.aiohttp_client import async_create_clientsession
 
-from .api import MagnaApi, MagnaAuthError, MagnaError, kind_for_label
-from .const import DOMAIN
+from .api import MagnaApi, MagnaAuthError, MagnaError, kind_for_label, point_code
+from .const import CONF_POINT_CODE, CONF_POINT_LABEL, DOMAIN, KIND_CONSUMPTION
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -26,17 +26,22 @@ STEP_USER_SCHEMA = vol.Schema(
 
 
 class MagnaConfigFlow(ConfigFlow, domain=DOMAIN):
-    """Prihlásenie do iPortálu."""
+    """Prihlásenie do iPortálu a výber odberného miesta."""
 
-    VERSION = 1
+    VERSION = 2
 
-    async def _async_check(self, username: str, password: str) -> list[str]:
-        """Prihlási sa a vráti zoznam odberných miest."""
+    def __init__(self) -> None:
+        self._username: str = ""
+        self._password: str = ""
+        self._points: list[str] = []
+
+    async def _async_points(self, username: str, password: str) -> list[str]:
+        """Prihlási sa a vráti labely odberných miest."""
         session = async_create_clientsession(self.hass)
         api = MagnaApi(session, username, password)
         try:
             await api.async_login()
-            return await api.async_points()
+            return [label for _, label in await api.async_points()]
         finally:
             await api.async_logout()
 
@@ -45,27 +50,59 @@ class MagnaConfigFlow(ConfigFlow, domain=DOMAIN):
     ) -> ConfigFlowResult:
         errors: dict[str, str] = {}
         if user_input is not None:
-            username = user_input[CONF_USERNAME]
-            password = user_input[CONF_PASSWORD]
+            self._username = user_input[CONF_USERNAME]
+            self._password = user_input[CONF_PASSWORD]
             try:
-                points = await self._async_check(username, password)
+                points = await self._async_points(self._username, self._password)
             except MagnaAuthError:
                 errors["base"] = "invalid_auth"
             except MagnaError as err:
                 _LOGGER.debug("iPortál neodpovedal: %s", err)
                 errors["base"] = "cannot_connect"
             else:
-                await self.async_set_unique_id(username.strip().lower())
-                self._abort_if_unique_id_configured()
-                druhy = sorted({kind_for_label(p) for p in points})
-                _LOGGER.debug("nájdené odberné miesta: %s (druhy %s)", points, druhy)
-                return self.async_create_entry(
-                    title=f"Magna ({username})",
-                    data={CONF_USERNAME: username, CONF_PASSWORD: password},
-                )
+                # Požičovňa a prebytok výroby nie sú samostatné odberné miesta,
+                # ale sprievodné rady k účtu -- koordinátor si ich nájde sám.
+                # Vyberá sa len skutočné odberné miesto spotreby.
+                self._points = [
+                    p for p in points if kind_for_label(p) == KIND_CONSUMPTION
+                ]
+                if not self._points:
+                    return self.async_abort(reason="no_points")
+                if len(self._points) == 1:
+                    return await self._async_create(self._points[0])
+                return await self.async_step_point()
 
         return self.async_show_form(
             step_id="user", data_schema=STEP_USER_SCHEMA, errors=errors
+        )
+
+    async def async_step_point(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Výber odberného miesta, keď ich je na účte viac."""
+        if user_input is not None:
+            return await self._async_create(user_input[CONF_POINT_LABEL])
+        return self.async_show_form(
+            step_id="point",
+            data_schema=vol.Schema(
+                {vol.Required(CONF_POINT_LABEL): vol.In(self._points)}
+            ),
+        )
+
+    async def _async_create(self, label: str) -> ConfigFlowResult:
+        kod = point_code(label)
+        # Identita je EIC kód, nie prihlasovacie meno -- na jednom účte môže
+        # byť viac odberných miest a každé je vlastný config entry.
+        await self.async_set_unique_id(f"{self._username.strip().lower()}:{kod}")
+        self._abort_if_unique_id_configured()
+        return self.async_create_entry(
+            title=label.split(",")[0].strip() or label,
+            data={
+                CONF_USERNAME: self._username,
+                CONF_PASSWORD: self._password,
+                CONF_POINT_CODE: kod,
+                CONF_POINT_LABEL: label,
+            },
         )
 
     async def async_step_reauth(
@@ -81,7 +118,7 @@ class MagnaConfigFlow(ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             username = entry.data[CONF_USERNAME]
             try:
-                await self._async_check(username, user_input[CONF_PASSWORD])
+                await self._async_points(username, user_input[CONF_PASSWORD])
             except MagnaAuthError:
                 errors["base"] = "invalid_auth"
             except MagnaError:

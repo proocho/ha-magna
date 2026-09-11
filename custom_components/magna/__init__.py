@@ -8,6 +8,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_create_clientsession
 
 from .api import MagnaApi
+from .const import CONF_POINT_CODE, CONF_POINT_LABEL
 from .coordinator import MagnaCoordinator
 
 PLATFORMS = [Platform.SENSOR]
@@ -21,7 +22,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: MagnaConfigEntry) -> boo
     session = async_create_clientsession(hass)
     api = MagnaApi(session, entry.data[CONF_USERNAME], entry.data[CONF_PASSWORD])
 
-    coordinator = MagnaCoordinator(hass, entry, api)
+    coordinator = MagnaCoordinator(
+        hass,
+        entry,
+        api,
+        code=entry.data[CONF_POINT_CODE],
+        label=entry.data[CONF_POINT_LABEL],
+    )
     await coordinator.async_config_entry_first_refresh()
 
     entry.runtime_data = coordinator

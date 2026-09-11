@@ -19,7 +19,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from homeassistant.util import dt as dt_util
 from homeassistant.util.unit_conversion import EnergyConverter
 
-from .api import MagnaApi, MagnaAuthError, MagnaError, kind_for_label, slug
+from .api import MagnaApi, MagnaAuthError, MagnaError, kind_for_label, point_code, slug
 from .const import (
     DOMAIN,
     GRANULARITY_DAY,
@@ -27,6 +27,7 @@ from .const import (
     HISTORY_MONTHS_REFRESH,
     INTERVAL_MONTH,
     KIND_BANK_RETURN,
+    KIND_CONSUMPTION,
     KIND_NAMES,
     KIND_SURPLUS,
     STAT_ID_BAND_TEMPLATE,
@@ -42,13 +43,15 @@ _LOGGER = logging.getLogger(__name__)
 class MagnaPoint:
     """Odberné miesto.
 
-    `eic` je atribút `data-value` z portálu, NIE poradie v zozname -- portál
-    to číta rovnako. `label` sa posiela ako parameter `option`.
+    `eic` je atribút `data-value` z portálu -- posiela sa v požiadavke, ale je
+    to len poradie v rozbaľovačke a pri zmene účtu sa posunie. Na identitu
+    (unique_id, statistic_id) slúži `code`, čo je EIC kód z labelu.
     """
 
     label: str
     kind: str
     eic: str
+    code: str
 
 
 @dataclass
@@ -58,6 +61,7 @@ class MagnaMonth:
     month: date
     total: float | None = None
     cost: float | None = None
+    cost_label: str | None = None
     bands: dict[str, float] = field(default_factory=dict)
     daily: dict[str, dict[date, float]] = field(default_factory=dict)
 
@@ -73,6 +77,15 @@ class MagnaData:
     points: list[MagnaPoint] = field(default_factory=list)
     months: dict[str, dict[date, MagnaMonth]] = field(default_factory=dict)
 
+    @property
+    def kinds(self) -> set[str]:
+        """Druhy, ktoré na účte skutočne existujú.
+
+        Väčšina zákazníkov Magny požičovňu nemá, takže senzory pre ňu nemá
+        zmysel vytvárať -- inak by natrvalo viseli na `unknown`.
+        """
+        return {p.kind for p in self.points}
+
     def newest(self, kind: str) -> MagnaMonth | None:
         """Najnovší mesiac s dátami.
 
@@ -87,7 +100,7 @@ class MagnaData:
         return None
 
     def net_change(self) -> tuple[date, float] | None:
-        """Zmena banky za posledný mesiac, kde sú oba toky."""
+        """Zmena požičovne za posledný mesiac, kde sú oba toky."""
         vklady = self.months.get(KIND_SURPLUS) or {}
         vybery = self.months.get(KIND_BANK_RETURN) or {}
         spolocne = [m for m in vklady if m in vybery and vklady[m].has_data]
@@ -130,29 +143,56 @@ def _build_statistics(daily: dict[date, float]) -> list[StatisticData]:
 class MagnaCoordinator(DataUpdateCoordinator[MagnaData]):
     """Sťahuje mesačné dáta a plní dlhodobé štatistiky."""
 
-    def __init__(self, hass: HomeAssistant, entry: ConfigEntry, api: MagnaApi) -> None:
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        entry: ConfigEntry,
+        api: MagnaApi,
+        code: str,
+        label: str,
+    ) -> None:
         super().__init__(
             hass,
             _LOGGER,
-            name=DOMAIN,
+            name=f"{DOMAIN} {code}",
             update_interval=timedelta(hours=UPDATE_INTERVAL_HOURS),
             config_entry=entry,
         )
         self.api = api
+        self.point_code = code
+        self.point_label = label
         self._points: list[MagnaPoint] | None = None
         self._first_run = True
 
     async def _async_points(self) -> list[MagnaPoint]:
+        """Zvolené odberné miesto + sprievodné rady účtu.
+
+        Požičovňa a prebytok výroby nie sú samostatné odberné miesta, ale rady
+        viazané na účet. Berieme ich teda vždy, ak existujú; zo skutočných
+        odberných miest berieme len to, ktoré si užívateľ vybral -- inak by sa
+        pri viacerých miestach navzájom prepisovali.
+        """
         if self._points is not None:
             return self._points
-        miesta = await self.api.async_points()
-        self._points = [
-            MagnaPoint(label=label, kind=kind_for_label(label), eic=eic)
-            for eic, label in miesta
+        vsetky = [
+            MagnaPoint(
+                label=label, kind=kind_for_label(label), eic=eic, code=point_code(label)
+            )
+            for eic, label in await self.api.async_points()
         ]
-        for p in self._points:
-            _LOGGER.debug("odberné miesto eic=%s kind=%s: %s", p.eic, p.kind, p.label)
-        return self._points
+        vybrane = [
+            p
+            for p in vsetky
+            if p.kind != KIND_CONSUMPTION or p.code == self.point_code
+        ]
+        if not any(p.kind == KIND_CONSUMPTION for p in vybrane):
+            raise MagnaError(
+                f"odberné miesto {self.point_label} sa na účte už nenachádza"
+            )
+        self._points = vybrane
+        for p in vybrane:
+            _LOGGER.debug("miesto eic=%s kind=%s kód=%s", p.eic, p.kind, p.code)
+        return vybrane
 
     async def _async_update_data(self) -> MagnaData:
         try:
@@ -164,13 +204,7 @@ class MagnaCoordinator(DataUpdateCoordinator[MagnaData]):
             mesiace = [_month_back(_first_of_month(dnes), i) for i in range(pocet)]
 
             for point in data.points:
-                # Jeden druh spracujeme raz. Na tomto účte je od každého druhu
-                # práve jedno miesto, ale demo účet ich má 11 naraz a bez tejto
-                # poistky by sa navzájom prepisovali (a stiahlo by sa 132 okien).
-                if point.kind in data.months:
-                    _LOGGER.debug("preskakujem %s, druh %s uz mam", point.label, point.kind)
-                    continue
-                data.months[point.kind] = {}
+                data.months.setdefault(point.kind, {})
                 for mesiac in mesiace:
                     try:
                         raw = await self.api.async_load(
@@ -184,10 +218,7 @@ class MagnaCoordinator(DataUpdateCoordinator[MagnaData]):
                         # Jeden chýbajúci mesiac nemá zhodiť celý update --
                         # portál pre staršie obdobia vracia prázdno.
                         _LOGGER.debug(
-                            "mesiac %s pre %s sa nestiahol: %s",
-                            mesiac,
-                            point.kind,
-                            err,
+                            "mesiac %s pre %s sa nestiahol: %s", mesiac, point.kind, err
                         )
                         continue
                     data.months[point.kind][mesiac] = self._parse_month(mesiac, raw)
@@ -197,7 +228,7 @@ class MagnaCoordinator(DataUpdateCoordinator[MagnaData]):
             raise UpdateFailed(str(err)) from err
 
         self._first_run = False
-        await self._async_import_statistics(data)
+        self._import_statistics(data)
         return data
 
     @staticmethod
@@ -214,6 +245,7 @@ class MagnaCoordinator(DataUpdateCoordinator[MagnaData]):
             month=mesiac,
             total=summary.get("total"),
             cost=summary.get("cost"),
+            cost_label=(summary.get("labels") or {}).get("cost"),
             bands=dict(summary.get("bands") or {}),
         )
         for nazov, series in (raw.get("series") or {}).items():
@@ -229,36 +261,40 @@ class MagnaCoordinator(DataUpdateCoordinator[MagnaData]):
                 out.daily[nazov] = po_dnoch
         return out
 
-    async def _async_import_statistics(self, data: MagnaData) -> None:
+    def _import_statistics(self, data: MagnaData) -> None:
         """Zapíše denné rady ako external statistics.
 
-        Zámerne sa tu nepočíta zostatok banky -- recorder si kumulatívny súčet
-        vedie sám, takže saldo je potom len rozdiel dvoch súčtov plus ukotvenie
-        z faktúry. Menej vlastnej logiky, ktorá sa môže rozísť.
+        Rady sa musia najprv poskladať cez VSETKY stiahnuté mesiace a až potom
+        importovať -- `_build_statistics` počíta kumulatívny súčet od nuly,
+        takže import po jednotlivých mesiacoch by ho zakaždým reštartoval
+        a súčty by boli nezmysel.
+
+        Zámerne sa tu nepočíta zostatok požičovne -- recorder si kumulatívny
+        súčet vedie sám, takže saldo je potom len rozdiel dvoch súčtov plus
+        ukotvenie z faktúry. Menej vlastnej logiky, ktorá sa môže rozísť.
         """
-        for kind, mesiace in data.months.items():
+        for point in data.points:
+            mesiace = data.months.get(point.kind) or {}
             celkom: dict[date, float] = {}
             po_pasmach: dict[str, dict[date, float]] = {}
             for mesiac in sorted(mesiace):
-                m = mesiace[mesiac]
-                for nazov, po_dnoch in m.daily.items():
+                for nazov, po_dnoch in mesiace[mesiac].daily.items():
                     ciel = po_pasmach.setdefault(nazov, {})
                     for den, value in po_dnoch.items():
                         ciel[den] = ciel.get(den, 0.0) + value
                         celkom[den] = celkom.get(den, 0.0) + value
 
+            nazov_miesta = KIND_NAMES.get(point.kind, point.kind)
             if celkom:
                 self._add(
-                    STAT_ID_TEMPLATE.format(kind=kind),
-                    f"Magna {KIND_NAMES.get(kind, kind)}",
+                    STAT_ID_TEMPLATE.format(code=point.code),
+                    f"Magna {nazov_miesta}",
                     celkom,
                 )
             for nazov, po_dnoch in po_pasmach.items():
-                if not po_dnoch:
-                    continue
                 self._add(
-                    STAT_ID_BAND_TEMPLATE.format(kind=kind, band=slug(nazov)),
-                    f"Magna {KIND_NAMES.get(kind, kind)} – {nazov}",
+                    STAT_ID_BAND_TEMPLATE.format(code=point.code, band=slug(nazov)),
+                    f"Magna {nazov_miesta} – {nazov}",
                     po_dnoch,
                 )
 

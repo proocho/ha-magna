@@ -14,16 +14,29 @@ fakturuje.
 **Senzory** (vždy za najnovší mesiac, ktorý má dáta – mesiac je v atribúte
 `mesiac`, rozpad po pásmach v ďalších atribútoch):
 
-| senzor | jednotka |
-|---|---|
-| Spotreba za mesiac | kWh |
-| Náklady za mesiac | EUR |
-| Prebytok výroby za mesiac | kWh |
-| Vrátené z požičovne za mesiac | kWh |
-| Zmena požičovne za mesiac | kWh |
+| senzor | jednotka | kedy vznikne |
+|---|---|---|
+| Spotreba za mesiac | kWh | vždy |
+| Náklady v 4T za mesiac | EUR | vždy |
+| Prebytok výroby za mesiac | kWh | len s fotovoltikou |
+| Vrátené z požičovne za mesiac | kWh | len s požičovňou |
+| Zmena požičovne za mesiac | kWh | len s požičovňou |
+
+Senzory pre požičovňu a prebytok sa vytvoria, **len ak tie odberné miesta na
+účte naozaj sú**. Väčšina zákazníkov ich nemá a natrvalo prázdne senzory sú
+horšie než žiadne.
+
+**Viac odberných miest:** pri pridávaní si vyberieš, ktoré chceš sledovať.
+Ďalšie pridáš ako samostatnú integráciu – každé má vlastné zariadenie aj
+vlastné štatistiky.
+
+> **Pozor na „Náklady v 4T".** Portál toto číslo počíta každému, aj tomu, kto
+> štvortarif nemá – vtedy je to hypotetické „koľko by si platil, keby si
+> prešiel". Doslovný popis z portálu je v atribúte `popis`. Spotreba v kWh je
+> v oboch pohľadoch rovnaká, líši sa len rozpad a cena.
 
 **Dlhodobé štatistiky** (`external statistics`) – denné rady pre každé odberné
-miesto a každé tarifné pásmo, pod `magna:*`. Recorder si k nim vedie kumulatívny
+miesto a každé tarifné pásmo, pod `magna:<EIC kód>`. Recorder si k nim vedie kumulatívny
 súčet, takže história zostáva aj po reštarte a dá sa použiť v Energy dashboarde.
 
 ### Zostatok požičovne
@@ -34,8 +47,8 @@ rozísť. Namiesto toho platí:
 
 ```
 zostatok = ukotvenie z faktúry
-         + magna:prebytok (kumulatívny súčet)
-         − magna:pozicovna (kumulatívny súčet)
+         + magna:<kód prebytku>   (kumulatívny súčet)
+         − magna:<kód požičovne>  (kumulatívny súčet)
 ```
 
 Ukotvenie je jedno číslo z poslednej faktúry (položka nespotrebovanej
@@ -88,6 +101,11 @@ Tri veci, ktoré stoja za zmienku, lebo sa na nich dá pošmyknúť:
    v demo režime, kde prvá séria patrila druhému riadku tabuľky. Integrácia
    preto páruje podľa `series_names`, a keď ho portál nepošle, podľa toho,
    ktorému súčtu sa séria zhoduje.
+4. **`eic` nie je identita, len poradie v rozbaľovačke.** Keď zákazníkovi
+   pribudne odberné miesto, indexy sa posunú. Identita sa preto stavia na EIC
+   kóde zo začiatku labelu.
+5. **`typ` je tarifný pohľad, nie druh miesta.** `radio_standard` má hodnotu
+   `1`, `radio_4t` hodnotu `0`.
 
 Súčty sa **neskladajú zo sérií** – portál ich posiela hotové v `text_sumar`,
 takže sa zobrazuje presne to, čo vidí užívateľ v portáli.

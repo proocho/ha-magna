@@ -20,7 +20,7 @@ import logging
 import re
 from typing import Any
 
-from aiohttp import ClientError, ClientSession
+from aiohttp import ClientError, ClientSession, ClientTimeout
 
 from .const import (
     BASE_URL,
@@ -28,6 +28,7 @@ from .const import (
     INTERVAL_MONTH,
     KIND_BANK_RETURN,
     KIND_CONSUMPTION,
+    REQUEST_TIMEOUT,
     SUFFIX_TO_KIND,
     TYP_4T,
     USER_AGENT,
@@ -46,11 +47,24 @@ _TD_RE = re.compile(r"<td[^>]*>(.*?)</td>", re.S)
 _TAG_RE = re.compile(r"<[^>]+>")
 _NUM_RE = re.compile(r"^([\d\s.,]+)\s*(kWh|EUR)$")
 # Odberne miesta su <div class='option' data-value='N'>Label</div> vnutri
-# <div class='options'> v bloku custom_select miesto. POZOR: povodna verzia
-# hladala <ul>, co na stranke naslo az legendu pasiem (#sortable_standard)
-# a vratila "Spotreba VT" / "Spotreba NT" namiesto odbernych miest.
+# <div class='options'> v bloku custom_select miesto.
+#
+# Dve pasce, obe zaplatene:
+#  1. Povodna verzia hladala <ul>, co na stranke naslo az legendu pasiem
+#     (#sortable_standard) a vratila "Spotreba VT" / "Spotreba NT".
+#  2. Druha verzia ukoncovala blok na "</div>\s*</div>". To funguje, len ked
+#     su polozky nalepene na seba (demo ucet), ale pri odsadenom HTML sa blok
+#     odrezal uz po prvej polozke - na zivom ucte sa tak stratilo tretie
+#     odberne miesto (Prebytok vyroby).
+#  3. Tretia verzia koncila na dalsom vyskyte "custom_select". Lenze kazda
+#     polozka ma v onclick volanie custom_select(this), takze blok skoncil
+#     hned na prvej z nich. Preto sa hlada az dalsi ATRIBUT triedy, nie
+#     lubovolny vyskyt toho slova.
 _SELECT_RE = re.compile(
-    r"custom_select\s+miesto.*?<div\s+class='options'>(.*?)</div>\s*</div>", re.S | re.I
+    r"class=['\"]custom_select\s+miesto['\"]"
+    r"(.*?)"
+    r"(?=class=['\"]custom_select\s+(?!miesto)|\Z)",
+    re.S | re.I,
 )
 _OPTION_RE = re.compile(
     r"<div[^>]*class='option[^']*'[^>]*data-value='([^']*)'[^>]*>(.*?)</div>", re.S | re.I
@@ -96,9 +110,28 @@ def kind_for_label(label: str) -> str:
     return KIND_CONSUMPTION
 
 
-def typ_for_label(label: str) -> int:
-    """Tarifný pohľad. Vždy 4T -- inak by prišla len štandardná tarifa."""
+def tariff_view() -> int:
+    """Tarifný pohľad pre `load.php`.
+
+    Vždy 4T. So štandardnou tarifou portál vráti len „Spotreba VT/NT" namiesto
+    rozpadu na pásma, a pri požičovni aj prebytku si 4T vnucuje sám.
+
+    Pozor pri interpretácii: pre zákazníka, ktorý 4T nemá, je stĺpec „Celkové
+    náklady v 4T" hypotetický -- koľko by platil, keby prešiel. Spotreba v kWh
+    je v oboch pohľadoch rovnaká, líši sa len rozpad a cena.
+    """
     return TYP_4T
+
+
+def point_code(label: str) -> str:
+    """EIC kód zo začiatku labelu -- stabilná identita odberného miesta.
+
+    Label má tvar „24ZZS40002004760 - PETROVA VES 418/418, PETROVA VES".
+    `data-value` sa na identitu použiť nedá, je to len poradie v zozname.
+    """
+    prvy = label.split(" - ", 1)[0].strip()
+    kod = re.sub(r"[^A-Za-z0-9]", "", prvy).lower()
+    return kod or slug(label)
 
 
 def parse_summary(text_sumar: str | None) -> dict[str, Any]:
@@ -223,7 +256,11 @@ class MagnaApi:
             headers["Referer"] = f"{BASE_URL}/spotreba"
         try:
             async with self._session.request(
-                "POST" if data is not None else "GET", url, data=data, headers=headers
+                "POST" if data is not None else "GET",
+                url,
+                data=data,
+                headers=headers,
+                timeout=ClientTimeout(total=REQUEST_TIMEOUT),
             ) as resp:
                 text = await resp.text()
                 if resp.status == 466:
@@ -313,7 +350,7 @@ class MagnaApi:
             ("date", date),
             ("interval", str(interval)),
             ("option", option),
-            ("typ", str(typ_for_label(option))),
+            ("typ", str(tariff_view())),
             ("eic", str(eic)),
         ]
         params += [("poradie[]", str(i)) for i in (1, 2, 3, 4)]
