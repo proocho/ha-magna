@@ -50,6 +50,21 @@
       },
       "banka_zmena": {
         "name": "Lending balance change this month"
+      },
+      "zostatok_pozicovne": {
+        "name": "Lending balance"
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Lending balance",
+        "description": "The portal does not publish the lending balance — only the monthly flow in and out. Enter the absolute level once from your invoice (the unused lent electricity item) and it is tracked from there. Leave empty if you do not want to track it.",
+        "data": {
+          "anchor_kwh": "Balance from invoice (kWh)",
+          "anchor_month": "As of invoice date"
+        }
       }
     }
   }

@@ -8,12 +8,26 @@ from typing import Any
 
 import voluptuous as vol
 
-from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
+from homeassistant.config_entries import (
+    ConfigEntry,
+    ConfigFlow,
+    ConfigFlowResult,
+    OptionsFlow,
+)
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
+from homeassistant.core import callback
+from homeassistant.helpers import selector
 from homeassistant.helpers.aiohttp_client import async_create_clientsession
 
 from .api import MagnaApi, MagnaAuthError, MagnaError, kind_for_label, point_code
-from .const import CONF_POINT_CODE, CONF_POINT_LABEL, DOMAIN, KIND_CONSUMPTION
+from .const import (
+    CONF_ANCHOR_KWH,
+    CONF_ANCHOR_MONTH,
+    CONF_POINT_CODE,
+    CONF_POINT_LABEL,
+    DOMAIN,
+    KIND_CONSUMPTION,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -29,6 +43,11 @@ class MagnaConfigFlow(ConfigFlow, domain=DOMAIN):
     """Prihlásenie do iPortálu a výber odberného miesta."""
 
     VERSION = 2
+
+    @staticmethod
+    @callback
+    def async_get_options_flow(config_entry: ConfigEntry) -> MagnaOptionsFlow:
+        return MagnaOptionsFlow()
 
     def __init__(self) -> None:
         self._username: str = ""
@@ -136,4 +155,42 @@ class MagnaConfigFlow(ConfigFlow, domain=DOMAIN):
             data_schema=vol.Schema({vol.Required(CONF_PASSWORD): str}),
             description_placeholders={"username": entry.data[CONF_USERNAME]},
             errors=errors,
+        )
+
+
+class MagnaOptionsFlow(OptionsFlow):
+    """Ukotvenie zostatku požičovne z faktúry."""
+
+    async def async_step_init(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        if user_input is not None:
+            return self.async_create_entry(data=user_input)
+
+        teraz = self.config_entry.options
+        return self.async_show_form(
+            step_id="init",
+            data_schema=vol.Schema(
+                {
+                    vol.Optional(
+                        CONF_ANCHOR_KWH,
+                        description={
+                            "suggested_value": teraz.get(CONF_ANCHOR_KWH)
+                        },
+                    ): selector.NumberSelector(
+                        selector.NumberSelectorConfig(
+                            min=0,
+                            step=0.01,
+                            mode=selector.NumberSelectorMode.BOX,
+                            unit_of_measurement="kWh",
+                        )
+                    ),
+                    vol.Optional(
+                        CONF_ANCHOR_MONTH,
+                        description={
+                            "suggested_value": teraz.get(CONF_ANCHOR_MONTH)
+                        },
+                    ): selector.DateSelector(),
+                }
+            ),
         )

@@ -21,6 +21,8 @@ from homeassistant.util.unit_conversion import EnergyConverter
 
 from .api import MagnaApi, MagnaAuthError, MagnaError, kind_for_label, point_code, slug
 from .const import (
+    CONF_ANCHOR_KWH,
+    CONF_ANCHOR_MONTH,
     DOMAIN,
     GRANULARITY_DAY,
     HISTORY_MONTHS_FIRST_RUN,
@@ -76,6 +78,8 @@ class MagnaData:
 
     points: list[MagnaPoint] = field(default_factory=list)
     months: dict[str, dict[date, MagnaMonth]] = field(default_factory=dict)
+    anchor_kwh: float | None = None
+    anchor_month: date | None = None
 
     @property
     def kinds(self) -> set[str]:
@@ -98,6 +102,45 @@ class MagnaData:
             if mesiace[m].has_data:
                 return mesiace[m]
         return None
+
+    def balance(self) -> float | None:
+        """Zostatok požičovne = ukotvenie + vklady − výbery po ukotvení.
+
+        Nedrží sa tu žiadny stav: pri každom refreshi sa celý rad prepočíta
+        z toho, čo povie portál. Ukotvenie je jediné číslo zvonku, lebo saldo
+        portál nezverejňuje -- vie sa z neho vyčítať len mesačný tok.
+
+        Počítajú sa len mesiace, kde majú dáta OBA toky. Bežiaci mesiac má
+        vklady a nulové výbery (tie pribudnú až pri fakturácii), takže by
+        zostatok umelo nafúkol.
+        """
+        if self.anchor_kwh is None or self.anchor_month is None:
+            return None
+        vklady = self.months.get(KIND_SURPLUS) or {}
+        vybery = self.months.get(KIND_BANK_RETURN) or {}
+        zostatok = self.anchor_kwh
+        for m in sorted(vklady):
+            if m <= self.anchor_month or m not in vybery:
+                continue
+            if not (vklady[m].has_data and vybery[m].has_data):
+                continue
+            zostatok += (vklady[m].total or 0.0) - (vybery[m].total or 0.0)
+        return round(zostatok, 2)
+
+    def balance_months(self) -> list[date]:
+        """Mesiace, ktoré do zostatku vstúpili -- kvôli atribútu senzora."""
+        if self.anchor_month is None:
+            return []
+        vklady = self.months.get(KIND_SURPLUS) or {}
+        vybery = self.months.get(KIND_BANK_RETURN) or {}
+        return [
+            m
+            for m in sorted(vklady)
+            if m > self.anchor_month
+            and m in vybery
+            and vklady[m].has_data
+            and vybery[m].has_data
+        ]
 
     def net_change(self) -> tuple[date, float] | None:
         """Zmena požičovne za posledný mesiac, kde majú dáta OBA toky.
@@ -172,6 +215,10 @@ class MagnaCoordinator(DataUpdateCoordinator[MagnaData]):
         self.point_label = label
         self._points: list[MagnaPoint] | None = None
         self._first_run = True
+        # Stiahnute mesiace sa drzia medzi refreshmi. Bezny refresh tiahne len
+        # posledne dva (starsie sa uz nemenia, okrem doplnenia pozicovne pri
+        # fakturacii), ale zostatok potrebuje cely rad od ukotvenia.
+        self._months: dict[str, dict[date, MagnaMonth]] = {}
 
     async def _async_points(self) -> list[MagnaPoint]:
         """Zvolené odberné miesto + sprievodné rady účtu.
@@ -203,13 +250,39 @@ class MagnaCoordinator(DataUpdateCoordinator[MagnaData]):
             _LOGGER.debug("miesto eic=%s kind=%s kód=%s", p.eic, p.kind, p.code)
         return vybrane
 
-    async def _async_update_data(self) -> MagnaData:
+    def _anchor(self) -> tuple[float | None, date | None]:
+        """Ukotvenie z options; prazdne, kym ho uzivatel nezada."""
+        options = (self.config_entry.options if self.config_entry else None) or {}
+        kwh = options.get(CONF_ANCHOR_KWH)
+        raw = options.get(CONF_ANCHOR_MONTH)
+        if kwh is None or not raw:
+            return None, None
         try:
-            data = MagnaData(points=await self._async_points())
-            pocet = (
-                HISTORY_MONTHS_FIRST_RUN if self._first_run else HISTORY_MONTHS_REFRESH
+            mesiac = datetime.fromisoformat(str(raw)).date().replace(day=1)
+        except ValueError:
+            _LOGGER.warning("neplatný mesiac ukotvenia: %s", raw)
+            return None, None
+        return float(kwh), mesiac
+
+    async def _async_update_data(self) -> MagnaData:
+        kotva_kwh, kotva_mesiac = self._anchor()
+        try:
+            data = MagnaData(
+                points=await self._async_points(),
+                anchor_kwh=kotva_kwh,
+                anchor_month=kotva_mesiac,
             )
             dnes = dt_util.now().date()
+            pocet = HISTORY_MONTHS_REFRESH
+            if self._first_run:
+                pocet = HISTORY_MONTHS_FIRST_RUN
+                if kotva_mesiac is not None:
+                    # Zostatok sa sklada od ukotvenia, takze na prvom behu
+                    # treba dotiahnut az po ten mesiac, aj keby bol starsi.
+                    od_kotvy = (dnes.year - kotva_mesiac.year) * 12 + (
+                        dnes.month - kotva_mesiac.month
+                    )
+                    pocet = max(pocet, od_kotvy + 1)
             mesiace = [_month_back(_first_of_month(dnes), i) for i in range(pocet)]
 
             for point in data.points:
@@ -235,6 +308,11 @@ class MagnaCoordinator(DataUpdateCoordinator[MagnaData]):
             raise ConfigEntryAuthFailed(str(err)) from err
         except MagnaError as err:
             raise UpdateFailed(str(err)) from err
+
+        # Zlucit s tym, co uz mame -- refresh tiahne len posledne mesiace.
+        for kind, mesiace_kind in data.months.items():
+            self._months.setdefault(kind, {}).update(mesiace_kind)
+        data.months = {k: dict(v) for k, v in self._months.items()}
 
         self._first_run = False
         self._import_statistics(data)

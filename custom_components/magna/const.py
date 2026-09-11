@@ -69,6 +69,12 @@ REQUEST_TIMEOUT = 60
 CONF_POINT_CODE = "point_code"
 CONF_POINT_LABEL = "point_label"
 
+# Ukotvenie zostatku pozicovne. Portal saldo nezobrazuje, da sa z neho zistit
+# len mesacny tok dnu a von. Absolutnu hladinu preto treba zadat raz z faktury
+# (polozka nespotrebovanej pozicanej elektriny) a odvtedy sa dopocitava.
+CONF_ANCHOR_KWH = "anchor_kwh"
+CONF_ANCHOR_MONTH = "anchor_month"
+
 # Statistic_id sa stavia na EIC kode z labelu, nie na data-value -- to je len
 # poradie v rozbalovacke a posunie sa, ked zakaznikovi pribudne odberne miesto.
 STAT_ID_TEMPLATE = "magna:{code}"

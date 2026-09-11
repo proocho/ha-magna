@@ -50,6 +50,21 @@
       },
       "banka_zmena": {
         "name": "Zmena požičovne za mesiac"
+      },
+      "zostatok_pozicovne": {
+        "name": "Zostatok požičovne"
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Zostatok požičovne",
+        "description": "Portál saldo požičovne nezverejňuje — vie sa z neho vyčítať len mesačný tok dnu a von. Absolútnu hladinu preto zadaj raz z faktúry (položka nespotrebovanej požičanej elektriny) a odvtedy sa dopočítava sama. Nechaj prázdne, ak zostatok sledovať nechceš.",
+        "data": {
+          "anchor_kwh": "Zostatok podľa faktúry (kWh)",
+          "anchor_month": "K dátumu faktúry"
+        }
       }
     }
   }

@@ -37,6 +37,8 @@ class MagnaSensorDescription(SensorEntityDescription):
     # Väčšina zákazníkov Magny požičovňu nemá a tri natrvalo prázdne senzory
     # sú horšie než žiadne.
     requires: frozenset[str] = frozenset()
+    # Senzor zostatku má zmysel, až keď je zadané ukotvenie z faktúry.
+    needs_anchor: bool = False
 
 
 def _mesiac_atributy(data: MagnaData, kind: str) -> dict[str, str | float]:
@@ -79,6 +81,22 @@ def _cost_extra(data: MagnaData) -> dict[str, str | float]:
     m = data.newest(KIND_CONSUMPTION)
     if m is not None and m.cost_label:
         out["popis"] = m.cost_label
+    return out
+
+
+def _balance(data: MagnaData) -> float | None:
+    return data.balance()
+
+
+def _balance_extra(data: MagnaData) -> dict[str, str | float]:
+    mesiace = data.balance_months()
+    out: dict[str, str | float] = {}
+    if data.anchor_kwh is not None and data.anchor_month is not None:
+        out["ukotvenie"] = data.anchor_kwh
+        out["ukotvenie_mesiac"] = data.anchor_month.strftime("%m/%Y")
+    if mesiace:
+        out["zapocitane_mesiace"] = len(mesiace)
+        out["po_mesiac"] = mesiace[-1].strftime("%m/%Y")
     return out
 
 
@@ -141,6 +159,17 @@ SENSORS: tuple[MagnaSensorDescription, ...] = (
         extra=lambda d: _mesiac_atributy(d, KIND_BANK_RETURN),
     ),
     MagnaSensorDescription(
+        key="zostatok_pozicovne",
+        translation_key="zostatok_pozicovne",
+        requires=frozenset({KIND_SURPLUS, KIND_BANK_RETURN}),
+        needs_anchor=True,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.MEASUREMENT,
+        value=_balance,
+        extra=_balance_extra,
+    ),
+    MagnaSensorDescription(
         key="banka_zmena",
         translation_key="banka_zmena",
         requires=frozenset({KIND_SURPLUS, KIND_BANK_RETURN}),
@@ -161,10 +190,12 @@ async def async_setup_entry(
     """Vytvorí senzory."""
     coordinator = entry.runtime_data
     dostupne = coordinator.data.kinds
+    ma_ukotvenie = coordinator.data.anchor_kwh is not None
     async_add_entities(
         MagnaSensor(coordinator, entry, description)
         for description in SENSORS
         if description.requires <= dostupne
+        and (ma_ukotvenie or not description.needs_anchor)
     )
 
 

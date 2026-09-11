@@ -41,20 +41,26 @@ súčet, takže história zostáva aj po reštarte a dá sa použiť v Energy da
 
 ### Zostatok požičovne
 
-Integrácia **zámerne nepočíta absolútny zostatok banky**. Portál ho neposkytuje
-a počítať ho vlastnou logikou by znamenalo držať stav, ktorý sa môže ticho
-rozísť. Namiesto toho platí:
+Portál saldo **nezverejňuje** — vie sa z neho vyčítať len mesačný tok dnu
+(prebytok výroby) a von (vrátené z požičovne). Absolútnu hladinu preto zadáš
+raz z faktúry (položka nespotrebovanej požičanej elektriny) v *Konfigurovať*
+a odvtedy sa dopočítava:
 
 ```
-zostatok = ukotvenie z faktúry
-         + magna:<kód prebytku>   (kumulatívny súčet)
-         − magna:<kód požičovne>  (kumulatívny súčet)
+zostatok = ukotvenie z faktúry + Σ (prebytok − vrátené) za mesiace po ukotvení
 ```
 
-Ukotvenie je jedno číslo z poslednej faktúry (položka nespotrebovanej
-požičanej elektriny). Recorder kumulatívne súčty vedie sám, takže zostatok je
-potom jednoduchý template senzor. Menej vlastnej logiky, menej miest, kde sa
-to môže rozísť.
+Nedrží sa pritom žiadny stav — pri každom obnovení sa celý rad prepočíta
+z toho, čo povie portál. Do súčtu vstupujú **len mesiace, kde majú dáta oba
+toky**: bežiaci mesiac má prebytok a nulové výbery (tie pribudnú až pri
+fakturácii), takže by zostatok umelo nafúkol. Koľko mesiacov sa započítalo
+a po ktorý, je v atribútoch senzora.
+
+Bez zadaného ukotvenia senzor nevznikne — mesačné toky fungujú aj tak.
+
+> Pôvodne to mal byť template senzor nad štatistikami. Nejde to: **šablóny
+> v Home Assistante sa na long-term statistics nevedia pozrieť.** Šlo by to
+> len cez SQL senzor nad tabuľkou `statistics`, čo je krehké.
 
 ## Čo integrácia nedá
 
