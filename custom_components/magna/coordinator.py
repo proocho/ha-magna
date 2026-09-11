@@ -100,10 +100,19 @@ class MagnaData:
         return None
 
     def net_change(self) -> tuple[date, float] | None:
-        """Zmena požičovne za posledný mesiac, kde sú oba toky."""
+        """Zmena požičovne za posledný mesiac, kde majú dáta OBA toky.
+
+        Stačiť vklady nemôže: výbery z požičovne pribúdajú až pri fakturácii,
+        takže bežiaci mesiac má vklady a nulové výbery -- a zmena by vyšla ako
+        celý prebytok, čo je nezmysel.
+        """
         vklady = self.months.get(KIND_SURPLUS) or {}
         vybery = self.months.get(KIND_BANK_RETURN) or {}
-        spolocne = [m for m in vklady if m in vybery and vklady[m].has_data]
+        spolocne = [
+            m
+            for m in vklady
+            if m in vybery and vklady[m].has_data and vybery[m].has_data
+        ]
         if not spolocne:
             return None
         m = max(spolocne)
@@ -291,12 +300,16 @@ class MagnaCoordinator(DataUpdateCoordinator[MagnaData]):
                     f"Magna {nazov_miesta}",
                     celkom,
                 )
-            for nazov, po_dnoch in po_pasmach.items():
-                self._add(
-                    STAT_ID_BAND_TEMPLATE.format(code=point.code, band=slug(nazov)),
-                    f"Magna {nazov_miesta} – {nazov}",
-                    po_dnoch,
-                )
+            # Pri jedinej serii je pasmova statistika kopia celkovej a jej nazov
+            # je aj tak len nahradny ("seria 1") -- prebytok vyroby portal po
+            # pasmach nerozpisuje.
+            if len(po_pasmach) > 1:
+                for nazov, po_dnoch in po_pasmach.items():
+                    self._add(
+                        STAT_ID_BAND_TEMPLATE.format(code=point.code, band=slug(nazov)),
+                        f"Magna {nazov_miesta} – {nazov}",
+                        po_dnoch,
+                    )
 
     def _add(self, statistic_id: str, name: str, daily: dict[date, float]) -> None:
         statistics = _build_statistics(daily)

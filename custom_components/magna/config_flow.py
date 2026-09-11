@@ -95,8 +95,11 @@ class MagnaConfigFlow(ConfigFlow, domain=DOMAIN):
         # byť viac odberných miest a každé je vlastný config entry.
         await self.async_set_unique_id(f"{self._username.strip().lower()}:{kod}")
         self._abort_if_unique_id_configured()
+        # Nazov bez EIC kodu -- z neho sa odvodzuju entity_id a
+        # "sensor.24zzs40002004760_petrova_ves_418_418_..." sa neda citat.
+        adresa = label.split(" - ", 1)[-1].split(",")[0].strip()
         return self.async_create_entry(
-            title=label.split(",")[0].strip() or label,
+            title=adresa or label,
             data={
                 CONF_USERNAME: self._username,
                 CONF_PASSWORD: self._password,
