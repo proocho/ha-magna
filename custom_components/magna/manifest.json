@@ -1,0 +1,13 @@
+{
+  "domain": "magna",
+  "name": "Magna iPortál - elektrina a požičovňa",
+  "codeowners": ["@proocho"],
+  "config_flow": true,
+  "dependencies": ["recorder"],
+  "documentation": "https://github.com/proocho/ha-magna",
+  "integration_type": "service",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/proocho/ha-magna/issues",
+  "requirements": [],
+  "version": "0.1.0"
+}

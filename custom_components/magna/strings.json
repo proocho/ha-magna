@@ -1,0 +1,38 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Prihlásenie do Magna iPortálu",
+        "description": "Zadaj prihlasovacie údaje z iportal.magna-energia.sk (sú rovnaké ako do zákazníckeho portálu Magna).",
+        "data": {
+          "username": "Prihlasovacie meno",
+          "password": "Heslo"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Znovu sa prihlásiť",
+        "description": "iPortál odmietol prihlásenie pre {username}. Zadaj heslo znova.",
+        "data": {
+          "password": "Heslo"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Nesprávne prihlasovacie meno alebo heslo.",
+      "cannot_connect": "iPortál neodpovedal. Skús to znova neskôr."
+    },
+    "abort": {
+      "already_configured": "Tento portálový účet je už pridaný.",
+      "reauth_successful": "Prihlásenie bolo obnovené."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "spotreba_mesiac": { "name": "Spotreba za mesiac" },
+      "naklady_mesiac": { "name": "Náklady za mesiac" },
+      "prebytok_mesiac": { "name": "Prebytok výroby za mesiac" },
+      "pozicovna_mesiac": { "name": "Vrátené z požičovne za mesiac" },
+      "banka_zmena": { "name": "Zmena požičovne za mesiac" }
+    }
+  }
+}
