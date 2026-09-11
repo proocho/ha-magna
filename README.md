@@ -98,6 +98,16 @@ Neoficiálna integrácia, nijako nesúvisí s MAGNA ENERGIA, a.s. Portál sa mô
 kedykoľvek zmeniť a integrácia potom prestane fungovať. Sťahuje sa dvakrát
 denne – mesačné dáta častejšie nemá zmysel.
 
+## Ikona integrácie
+
+Ikona je priamo v integrácii (`custom_components/magna/brand/`) a Home Assistant
+ju od verzie 2026.3.0 servíruje sám cez `/api/brands/integration/magna/icon.png`
+([brands proxy API](https://developers.home-assistant.io/blog/2026/02/24/brands-proxy-api)).
+Do repozitára `home-assistant/brands` sa ikony custom integrácií už neposielajú.
+
+Ikona je **vlastná** – batéria so slnkom, teda uložené slnko. Logo MAGNA ENERGIA
+sa tu zámerne nepoužíva, aby integrácia nevyzerala ako oficiálna.
+
 ## Licencia
 
 MIT
