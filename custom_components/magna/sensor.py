@@ -97,6 +97,10 @@ def _balance_extra(data: MagnaData) -> dict[str, str | float]:
     if mesiace:
         out["zapocitane_mesiace"] = len(mesiace)
         out["po_mesiac"] = mesiace[-1].strftime("%m/%Y")
+        out["presnost"] = (
+            "odhad – banká sa len prebytok pri kladných spotových cenách, "
+            "portál ho nerozlišuje; po každej faktúre prepíš ukotvenie"
+        )
     return out
 
 

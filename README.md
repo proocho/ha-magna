@@ -58,6 +58,24 @@ a po ktorý, je v atribútoch senzora.
 
 Bez zadaného ukotvenia senzor nevznikne — mesačné toky fungujú aj tak.
 
+#### Prečo je to odhad a nie presné číslo
+
+**Banká sa len prebytok dodaný pri kladných spotových cenách.** Faktúra to má
+ako samostatnú položku („Požičané množstvo (pri kladných spotových cenách)"),
+ale **portál ju nezverejňuje** — pozná len dodaný prebytok. Overené na faktúre
+za 08/2026 do centa:
+
+```
+1 516,76 + 1 229,10 (požičané) − 601,00 = 2 144,87  ← faktúra
+1 516,76 + 1 297,54 (prebytok) − 601,00 = 2 213,30  ← čo vie integrácia
+```
+
+Rozdiel 68,43 kWh je prebytok dodaný v hodinách so záporným spotom, teda
+**5,3 % mesačného prebytku**. Odhad preto rastie rýchlejšie než skutočnosť.
+
+Preto: **po každej faktúre prepíš ukotvenie** novým číslom z položky
+*Zostatok do nasledujúceho obdobia*. Medzi faktúrami je hodnota orientačná.
+
 > Pôvodne to mal byť template senzor nad štatistikami. Nejde to: **šablóny
 > v Home Assistante sa na long-term statistics nevedia pozrieť.** Šlo by to
 > len cez SQL senzor nad tabuľkou `statistics`, čo je krehké.

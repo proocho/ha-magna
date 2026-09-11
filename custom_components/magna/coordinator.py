@@ -104,15 +104,25 @@ class MagnaData:
         return None
 
     def balance(self) -> float | None:
-        """Zostatok požičovne = ukotvenie + vklady − výbery po ukotvení.
+        """ODHAD zostatku požičovne = ukotvenie + prebytok − vrátené.
 
         Nedrží sa tu žiadny stav: pri každom refreshi sa celý rad prepočíta
         z toho, čo povie portál. Ukotvenie je jediné číslo zvonku, lebo saldo
         portál nezverejňuje -- vie sa z neho vyčítať len mesačný tok.
 
         Počítajú sa len mesiace, kde majú dáta OBA toky. Bežiaci mesiac má
-        vklady a nulové výbery (tie pribudnú až pri fakturácii), takže by
+        prebytok a nulové výbery (tie pribudnú až pri fakturácii), takže by
         zostatok umelo nafúkol.
+
+        PRECO ODHAD: faktúra banká „Požičané množstvo (pri kladných spotových
+        cenách)", nie „Dodané prebytky". Prebytok dodaný v hodinách so záporným
+        spotom sa NEBANKÁ. Overené na faktúre za 08/2026 do centa:
+            1 516,76 + 1 229,10 − 601,00 = 2 144,87  (sedí)
+            1 516,76 + 1 297,54 − 601,00 = 2 213,30  (o 68,43 viac)
+        Portál pritom zverejňuje len dodaný prebytok (1 297,54), požičané
+        množstvo je iba na faktúre. Odhad preto **rastie rýchlejšie než
+        skutočnosť** -- v auguste o 68,44 kWh, teda 5,3 % prebytku. Preto sa
+        oplatí ukotvenie po každej faktúre prepísať.
         """
         if self.anchor_kwh is None or self.anchor_month is None:
             return None
