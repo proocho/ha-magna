@@ -53,6 +53,9 @@
       },
       "zostatok_pozicovne": {
         "name": "Zostatok požičovne (odhad)"
+      },
+      "zostatok_pozicovne_priebezny": {
+        "name": "Zostatok požičovne (priebežný odhad)"
       }
     }
   },

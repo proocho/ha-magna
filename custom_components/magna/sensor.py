@@ -107,6 +107,25 @@ def _balance_extra(data: MagnaData) -> dict[str, str | float]:
     return out
 
 
+def _balance_running(data: MagnaData) -> float | None:
+    return data.balance_running()
+
+
+def _balance_running_extra(data: MagnaData) -> dict[str, str | float]:
+    out = _balance_extra(data)
+    zaklad = data.balance()
+    beziaci = data.balance_running()
+    mesiace = data.unbilled_months()
+    out["nevyfakturovane_mesiace"] = ", ".join(m.strftime("%m/%Y") for m in mesiace)
+    if zaklad is not None and beziaci is not None:
+        out["nevyfakturovane_kwh"] = round(beziaci - zaklad, 2)
+    out["presnost"] = (
+        "odhad – nevyfakturované mesiace sa rátajú ako prebytok − spotreba; "
+        "záporná hodnota = odhad dokúpenej elektriny"
+    )
+    return out
+
+
 def _net(data: MagnaData) -> float | None:
     zmena = data.net_change()
     return None if zmena is None else zmena[1]
@@ -178,6 +197,17 @@ SENSORS: tuple[MagnaSensorDescription, ...] = (
         state_class=SensorStateClass.TOTAL,
         value=_balance,
         extra=_balance_extra,
+    ),
+    MagnaSensorDescription(
+        key="zostatok_pozicovne_priebezny",
+        translation_key="zostatok_pozicovne_priebezny",
+        requires=frozenset({KIND_SURPLUS, KIND_BANK_RETURN}),
+        needs_anchor=True,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL,
+        value=_balance_running,
+        extra=_balance_running_extra,
     ),
     MagnaSensorDescription(
         key="banka_zmena",

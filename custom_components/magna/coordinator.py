@@ -152,6 +152,52 @@ class MagnaData:
             and vybery[m].has_data
         ]
 
+    def unbilled_months(self) -> list[date]:
+        """Mesiace po ukotvení, ktoré ešte nie sú vyfakturované.
+
+        Majú spotrebu alebo prebytok, ale ešte nie výbery z požičovne -- tie
+        pribudnú až pri faktúre. Typicky bežiaci mesiac a prvých ~10 dní
+        nasledujúceho aj ten predošlý.
+        """
+        if self.anchor_month is None:
+            return []
+        zapocitane = set(self.balance_months())
+        vklady = self.months.get(KIND_SURPLUS) or {}
+        spotreba = self.months.get(KIND_CONSUMPTION) or {}
+        return [
+            m
+            for m in sorted(set(vklady) | set(spotreba))
+            if m > self.anchor_month
+            and m not in zapocitane
+            and (
+                (m in vklady and vklady[m].has_data)
+                or (m in spotreba and spotreba[m].has_data)
+            )
+        ]
+
+    def balance_running(self) -> float | None:
+        """PRIEBEŽNÝ odhad zostatku = balance() + nevyfakturované mesiace.
+
+        Za nevyfakturovaný mesiac sa ráta prebytok − spotreba: kým je v banke
+        kredit, vráti sa z nej celá spotreba (faktúra 08/2026: spotreba 601,00
+        = vrátené 601,00). Bez toho by zostatok celý bežiaci mesiac stál a na
+        začiatku mesiaca by vypadol aj ten predošlý, kým nepríde faktúra --
+        v zime je to skok o stovky kWh.
+
+        Môže vyjsť záporne. Banka taká byť nemôže, ale záporné číslo je tu
+        užitočné: je to odhad, koľko sa už muselo dokúpiť za pásmové ceny.
+        """
+        zostatok = self.balance()
+        if zostatok is None:
+            return None
+        vklady = self.months.get(KIND_SURPLUS) or {}
+        spotreba = self.months.get(KIND_CONSUMPTION) or {}
+        for m in self.unbilled_months():
+            dnu = vklady[m].total if m in vklady else None
+            von = spotreba[m].total if m in spotreba else None
+            zostatok += (dnu or 0.0) - (von or 0.0)
+        return round(zostatok, 2)
+
     def net_change(self) -> tuple[date, float] | None:
         """Zmena požičovne za posledný mesiac, kde majú dáta OBA toky.
 

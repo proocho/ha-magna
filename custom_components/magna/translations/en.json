@@ -53,6 +53,9 @@
       },
       "zostatok_pozicovne": {
         "name": "Lending balance (estimate)"
+      },
+      "zostatok_pozicovne_priebezny": {
+        "name": "Lending balance (running estimate)"
       }
     }
   },

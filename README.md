@@ -83,6 +83,25 @@ Rozdiel 68,43 kWh je prebytok dodaný v hodinách so záporným spotom, teda
 Preto: **po každej faktúre prepíš ukotvenie** novým číslom z položky
 *Zostatok do nasledujúceho obdobia*. Medzi faktúrami je hodnota orientačná.
 
+#### Priebežný odhad
+
+Druhý senzor, **Zostatok požičovne (priebežný odhad)**, pripočíta aj mesiace,
+ktoré ešte nie sú vyfakturované:
+
+```
+priebežný = zostatok + Σ (prebytok − spotreba) za nevyfakturované mesiace
+```
+
+Kým je v banke kredit, vráti sa z nej celá spotreba (faktúra 08/2026:
+spotreba 601,00 = vrátené 601,00), takže spotreba je dobrá náhrada za výbery,
+ktoré portál ešte nepozná. Bez toho by zostatok celý mesiac stál a na začiatku
+mesiaca by na desať dní vypadol aj predošlý mesiac, kým nepríde faktúra —
+v zime je to skok o stovky kWh.
+
+**Môže vyjsť záporne.** Banka taká byť nemôže, ale záporné číslo je
+užitočné: je to odhad, koľko elektriny sa už muselo dokúpiť za pásmové ceny.
+Ktoré mesiace sú nevyfakturované, je v atribúte `nevyfakturovane_mesiace`.
+
 > Pôvodne to mal byť template senzor nad štatistikami. Nejde to: **šablóny
 > v Home Assistante sa na long-term statistics nevedia pozrieť.** Šlo by to
 > len cez SQL senzor nad tabuľkou `statistics`, čo je krehké.
@@ -92,7 +111,8 @@ Preto: **po každej faktúre prepíš ukotvenie** novým číslom z položky
 - **Živý zostatok neexistuje.** Portál sám hlási, že *priebehy vrátenej
   elektriny pre požičovňu sa generujú pri vystavovaní faktúry, spravidla
   v prvej dekáde nasledujúceho mesiaca.* Údaje o výberoch z banky teda
-  zaostávajú aj o päť týždňov. Toto je na strane dodávateľa a nedá sa obísť.
+  zaostávajú aj o päť týždňov. Toto je na strane dodávateľa a nedá sa obísť;
+  priebežný odhad ich nahrádza spotrebou.
 - **Spotreba a výroba chodia D+1.** Portál zobrazuje „aktuálne údaje za
   včerajší deň“.
 - **Ceny a produkty sa nečítajú.** Sú v HTML kartách portálu, nie v dátovom
