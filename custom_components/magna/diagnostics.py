@@ -9,8 +9,11 @@ from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
 from homeassistant.core import HomeAssistant
 
 from . import MagnaConfigEntry
+from .const import CONF_POINT_CODE, CONF_POINT_LABEL
 
-TO_REDACT = {CONF_USERNAME, CONF_PASSWORD}
+# Label má tvar „EIC - ulica číslo, obec“, kód je celý EIC -- oboje
+# identifikuje domácnosť, takže z `entry.data` nesmie ísť von ani jedno.
+TO_REDACT = {CONF_USERNAME, CONF_PASSWORD, CONF_POINT_CODE, CONF_POINT_LABEL}
 
 
 async def async_get_config_entry_diagnostics(
